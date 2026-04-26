@@ -104,4 +104,51 @@ Future<Database> _initDB(String filePath) async {
     return result.map((map) => Producto.fromMap(map)).toList();
   }
 
+Future<List<Map<String, dynamic>>> getHistorialEntregas() async {
+    final db = await instance.database;
+    // Usamos un JOIN para traer el nombre del cliente junto con la entrega
+    return await db.rawQuery('''
+      SELECT e.*, c.nombre as cliente_nombre, c.codigo_congeladora 
+      FROM entregas e 
+      JOIN clientes c ON e.cliente_id = c.id 
+      ORDER BY e.fecha DESC
+    ''');
+  }
+// --- MÉTODO PARA PROCESAR LA ENTREGA COMPLETA ---
+  Future<void> procesarEntrega(int clienteId, List<Map<String, dynamic>> carrito, double total) async {
+    final db = await instance.database;
+    final fecha = DateTime.now().toIso8601String();
+
+    // Iniciamos una transacción para que, si algo falla, no se guarde nada a medias
+    await db.transaction((txn) async {
+      // 1. Insertar la cabecera de la Entrega
+      int entregaId = await txn.insert('entregas', {
+        'cliente_id': clienteId,
+        'fecha': fecha,
+        'total': total,
+      });
+
+      // 2. Procesar cada ítem del carrito
+      for (var item in carrito) {
+        int productoId = item['id'];
+        int cantidad = item['cantidad'];
+        double precioUnitario = item['precio'];
+
+        // Insertar en Detalle de Entregas
+        await txn.insert('detalle_entregas', {
+          'entrega_id': entregaId,
+          'producto_id': productoId,
+          'cantidad': cantidad,
+          'precio_unitario': precioUnitario,
+        });
+
+        // 3. ¡EL DESCUENTO! Actualizar el stock del helado
+        await txn.execute('''
+          UPDATE productos 
+          SET stock_actual = stock_actual - ? 
+          WHERE id = ?
+        ''', [cantidad, productoId]);
+      }
+    });
+  }
 }

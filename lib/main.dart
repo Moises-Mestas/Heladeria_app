@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/dashboard.dart'; // Importamos tu nueva pantalla
+import 'package:frontend_app/screens/main_navigation.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +19,7 @@ class MiHeladeriaApp extends StatelessWidget {
         useMaterial3: true,
       ),
       // Aquí le decimos que la pantalla inicial es el Dashboard
-      home: const DashboardScreen(), 
+      home: const MainNavigation(),
     );
   }
 }
