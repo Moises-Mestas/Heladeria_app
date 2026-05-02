@@ -20,13 +20,12 @@ Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    await deleteDatabase(path);
 
     return await openDatabase(
       path,
-      version: 1, // 👈 Incrementa la versión cada vez que cambies el esquema
+      version: 1, 
       onCreate: _createDB,
-      onUpgrade: _upgradeDB, // 👈 Maneja migraciones
+      onUpgrade: _upgradeDB, 
     );
   }
 
@@ -93,11 +92,47 @@ Future<Database> _initDB(String filePath) async {
   }
 
 
+// Busca un cliente por su ID
+  Future<Cliente?> getClientePorId(int id) async {
+    final db = await instance.database;
+    final maps = await db.query('clientes', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      return Cliente.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  // Cuenta cuántas entregas se le ha hecho a un cliente
+  Future<int> contarEntregasCliente(int clienteId) async {
+    final db = await instance.database;
+    final result = await db.rawQuery('SELECT COUNT(*) FROM entregas WHERE cliente_id = ?', [clienteId]);
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
   Future<int> insertProducto(Producto producto) async {
     final db = await instance.database;
     return await db.insert('productos', producto.toMap());
   }
+// --- NUEVOS MÉTODOS CRUD PARA PRODUCTOS ---
+  Future<int> updateProducto(Producto producto) async {
+    final db = await instance.database;
+    return await db.update(
+      'productos',
+      producto.toMap(),
+      where: 'id = ?',
+      whereArgs: [producto.id],
+    );
+  }
 
+  Future<int> deleteProducto(int id) async {
+    final db = await instance.database;
+    return await db.delete(
+      'productos',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+  
   Future<List<Producto>> getTodosLosProductos() async {
     final db = await instance.database;
     final result = await db.query('productos');
