@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart'; // <-- Nueva librería
 import '../models/cliente.dart';
 
 class ClienteDetalleScreen extends StatelessWidget {
@@ -9,9 +10,20 @@ class ClienteDetalleScreen extends StatelessWidget {
 
   const ClienteDetalleScreen({super.key, required this.cliente, required this.totalEntregas});
 
+  // Reutilizamos la misma función mágica
+  Future<void> _abrirEnGoogleMaps(BuildContext context, double lat, double lng) async {
+    final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir Google Maps')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Si no hay coordenadas, usamos unas por defecto para que no explote
     final double lat = cliente.latitud ?? -15.4965;
     final double lng = cliente.longitud ?? -70.1333;
 
@@ -23,7 +35,6 @@ class ClienteDetalleScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Tarjeta con los datos
           Card(
             margin: const EdgeInsets.all(16),
             child: Padding(
@@ -46,24 +57,32 @@ class ClienteDetalleScreen extends StatelessWidget {
             ),
           ),
           
-          // Título del Mapa
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Ubicación de la tienda:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ubicación de la tienda:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                // ¡Nuevo botón aquí!
+                if (cliente.latitud != null)
+                  ElevatedButton.icon(
+                    onPressed: () => _abrirEnGoogleMaps(context, lat, lng),
+                    icon: const Icon(Icons.directions, size: 18),
+                    label: const Text('Navegar'),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
 
-          // Mini Mapa
           Expanded(
             child: cliente.latitud == null
                 ? const Center(child: Text('No se guardaron coordenadas para este cliente.'))
                 : FlutterMap(
                     options: MapOptions(
                       initialCenter: LatLng(lat, lng),
-                      initialZoom: 16.0, // Zoom más cercano para ver bien la calle
+                      initialZoom: 16.0,
                     ),
                     children: [
                       TileLayer(
