@@ -23,7 +23,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _productos = productosDB);
   }
 
-  // Sirve tanto para CREAR como para EDITAR
+  // --- NUEVO: Ventanita rápida solo para sumar stock ---
+  void _mostrarDialogoAbastecer(Producto producto) {
+    final cantidadController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Abastecer: ${producto.nombre}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Stock actual: ${producto.stockActual} unidades', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              TextField(
+                controller: cantidadController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '¿Cuántos llegaron?',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.add_shopping_cart, color: Colors.green),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                // int.tryParse evita que la app explote si dejas el campo vacío o pones letras
+                int? cantidadIngresada = int.tryParse(cantidadController.text);
+                
+                if (cantidadIngresada != null && cantidadIngresada > 0) {
+                  // Hacemos la matemática: Stock Viejo + Lo que acaba de llegar
+                  producto.stockActual += cantidadIngresada;
+                  
+                  // Guardamos el producto actualizado en la BD
+                  await DatabaseHelper.instance.updateProducto(producto);
+                  _cargarProductos();
+                  
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('¡Stock sumado! Ahora tienes ${producto.stockActual} unidades xd')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+              child: const Text('Sumar Stock'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Sirve tanto para CREAR como para EDITAR (Nombre y Precio)
   void _mostrarDialogoProducto({Producto? productoAEditar}) {
     final esEdicion = productoAEditar != null;
     final nombreController = TextEditingController(text: esEdicion ? productoAEditar.nombre : '');
@@ -40,7 +97,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               TextField(controller: nombreController, decoration: const InputDecoration(labelText: 'Nombre')),
               TextField(controller: precioController, decoration: const InputDecoration(labelText: 'Precio (S/)'), keyboardType: TextInputType.number),
-              TextField(controller: stockController, decoration: const InputDecoration(labelText: 'Stock (Cant.)'), keyboardType: TextInputType.number),
+              // Si estamos editando, tal vez ya no queramos tocar el stock por aquí, 
+              // pero lo dejamos por si necesitas hacer una corrección manual.
+              TextField(controller: stockController, decoration: const InputDecoration(labelText: 'Stock Total (Cant.)'), keyboardType: TextInputType.number),
             ],
           ),
           actions: [
@@ -48,7 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ElevatedButton(
               onPressed: () async {
                 final productoFormulario = Producto(
-                  id: esEdicion ? productoAEditar.id : null, // Mantenemos el ID si estamos editando
+                  id: esEdicion ? productoAEditar.id : null,
                   nombre: nombreController.text,
                   precio: double.parse(precioController.text),
                   stockActual: int.parse(stockController.text),
@@ -71,7 +130,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Diálogo de confirmación para eliminar
   void _confirmarEliminar(Producto producto) {
     showDialog(
       context: context,
@@ -96,7 +154,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mi Inventario'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
       body: _productos.isEmpty
           ? const Center(child: Text('No hay helados en el inventario aún.'))
           : ListView.builder(
@@ -112,14 +169,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // --- NUEVO BOTÓN: Abastecer ---
+                        IconButton(
+                          icon: const Icon(Icons.add_box, color: Colors.green),
+                          tooltip: 'Abastecer (Sumar Stock)',
+                          onPressed: () => _mostrarDialogoAbastecer(producto),
+                        ),
                         // Botón Editar
                         IconButton(
                           icon: const Icon(Icons.edit, color: Colors.grey),
+                          tooltip: 'Editar Datos',
                           onPressed: () => _mostrarDialogoProducto(productoAEditar: producto),
                         ),
                         // Botón Eliminar
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          tooltip: 'Eliminar',
                           onPressed: () => _confirmarEliminar(producto),
                         ),
                       ],
@@ -129,9 +194,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarDialogoProducto(), // Si no le pasamos nada, crea uno nuevo
+        onPressed: () => _mostrarDialogoProducto(),
         icon: const Icon(Icons.add),
-        label: const Text('Añadir Helado'),
+        label: const Text('Añadir Nuevo Helado'),
       ),
     );
   }

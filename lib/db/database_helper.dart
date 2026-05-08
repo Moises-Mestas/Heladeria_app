@@ -132,7 +132,25 @@ Future<Database> _initDB(String filePath) async {
       whereArgs: [id],
     );
   }
-  
+  // --- NUEVOS MÉTODOS CRUD PARA CLIENTES ---
+  Future<int> updateCliente(Cliente cliente) async {
+    final db = await instance.database;
+    return await db.update(
+      'clientes',
+      cliente.toMap(),
+      where: 'id = ?',
+      whereArgs: [cliente.id],
+    );
+  }
+
+  Future<int> deleteCliente(int id) async {
+    final db = await instance.database;
+    return await db.delete(
+      'clientes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
   Future<List<Producto>> getTodosLosProductos() async {
     final db = await instance.database;
     final result = await db.query('productos');
@@ -148,6 +166,34 @@ Future<List<Map<String, dynamic>>> getHistorialEntregas() async {
       JOIN clientes c ON e.cliente_id = c.id 
       ORDER BY e.fecha DESC
     ''');
+  }
+  // --- MÉTODO PARA ANULAR ENTREGA Y DEVOLVER STOCK ---
+  Future<void> anularEntrega(int entregaId) async {
+    final db = await instance.database;
+
+    // Usamos una transacción para que si algo falla, no se arruine la base de datos
+    await db.transaction((txn) async {
+      // 1. Leemos los detalles de la entrega (para saber qué helados devolver y cuántos)
+      final detalles = await txn.query('detalle_entregas', where: 'entrega_id = ?', whereArgs: [entregaId]);
+
+      // 2. Le devolvemos el stock al inventario
+      for (var detalle in detalles) {
+        int productoId = detalle['producto_id'] as int;
+        int cantidad = detalle['cantidad'] as int;
+
+        await txn.execute('''
+          UPDATE productos 
+          SET stock_actual = stock_actual + ? 
+          WHERE id = ?
+        ''', [cantidad, productoId]);
+      }
+
+      // 3. Borramos los detalles de esa entrega
+      await txn.delete('detalle_entregas', where: 'entrega_id = ?', whereArgs: [entregaId]);
+
+      // 4. Borramos la cabecera (la boleta principal)
+      await txn.delete('entregas', where: 'id = ?', whereArgs: [entregaId]);
+    });
   }
 // --- MÉTODO PARA PROCESAR LA ENTREGA COMPLETA ---
   Future<void> procesarEntrega(int clienteId, List<Map<String, dynamic>> carrito, double total) async {

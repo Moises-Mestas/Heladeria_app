@@ -90,10 +90,7 @@ class _MapaScreenState extends State<MapaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Ubicación de Congeladoras'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
+
       body: FlutterMap(
         options: const MapOptions(
           initialCenter: LatLng(-15.4965, -70.1333), 

@@ -15,7 +15,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
   List<Map<String, dynamic>> _entregasTodas = [];
   List<Map<String, dynamic>> _entregasFiltradas = []; 
   
-  // Variables para guardar los filtros activos
   final TextEditingController _buscadorController = TextEditingController();
   DateTimeRange? _rangoFechas;
   String _filtroIdExacto = '';
@@ -30,46 +29,40 @@ class _HistorialScreenState extends State<HistorialScreen> {
     final data = await DatabaseHelper.instance.getHistorialEntregas();
     setState(() {
       _entregasTodas = data;
-      _entregasFiltradas = data;
     });
+    // Llamamos a aplicar filtros para que al anular una venta no se borre tu búsqueda actual
+    _aplicarFiltros(); 
   }
 
-  // --- LÓGICA MAESTRA DE FILTROS ---
   void _aplicarFiltros() {
     final textoGeneral = _buscadorController.text.toLowerCase();
 
     setState(() {
       _entregasFiltradas = _entregasTodas.where((entrega) {
-        // 1. Filtro de Texto (Nombre)
         final nombre = entrega['cliente_nombre'].toString().toLowerCase();
         bool pasaTexto = nombre.contains(textoGeneral);
 
-        // 2. Filtro de ID de Congeladora
         bool pasaId = true;
         if (_filtroIdExacto.isNotEmpty) {
           pasaId = entrega['codigo_congeladora'].toString() == _filtroIdExacto;
         }
 
-        // 3. Filtro de Rango de Fechas
         bool pasaFecha = true;
         if (_rangoFechas != null) {
           final fechaNativa = DateTime.parse(entrega['fecha']);
-          // Ajustamos el fin para que cubra todo ese día hasta las 23:59:59
           final finAjustado = _rangoFechas!.end.add(const Duration(hours: 23, minutes: 59));
           pasaFecha = fechaNativa.isAfter(_rangoFechas!.start) && fechaNativa.isBefore(finAjustado);
         }
 
-        // Retorna TRUE solo si cumple TODOS los filtros activos a la vez
         return pasaTexto && pasaId && pasaFecha;
       }).toList();
     });
   }
 
-  // --- VENTANAS DE FILTROS ---
   Future<void> _seleccionarRangoFechas() async {
     final resultado = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2023), // Año de inicio
+      firstDate: DateTime(2023), 
       lastDate: DateTime.now(),
       helpText: 'Selecciona el rango de fechas',
     );
@@ -94,7 +87,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              setState(() => _filtroIdExacto = ''); // Limpiar el filtro de ID
+              setState(() => _filtroIdExacto = ''); 
               _aplicarFiltros();
               Navigator.pop(context);
             },
@@ -113,7 +106,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
     );
   }
 
-  // Abrir vista detallada (que ya habíamos creado)
   void _abrirDetallesCliente(int clienteId) async {
     final cliente = await DatabaseHelper.instance.getClientePorId(clienteId);
     final totalEntregas = await DatabaseHelper.instance.contarEntregasCliente(clienteId);
@@ -126,19 +118,40 @@ class _HistorialScreenState extends State<HistorialScreen> {
     }
   }
 
+  // --- NUEVO: Diálogo de confirmación para anular venta ---
+  void _confirmarAnulacion(int entregaId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Anular esta entrega?'),
+        content: const Text('Esta acción eliminará el registro de la venta y devolverá los helados automáticamente a tu inventario. ¿Estás seguro?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              await DatabaseHelper.instance.anularEntrega(entregaId);
+              _cargarHistorial(); // Refrescamos la lista
+              if (context.mounted) Navigator.pop(context); // Cerramos el diálogo
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Venta anulada. ¡El stock ha sido devuelto! xd'))
+                );
+              }
+            },
+            child: const Text('Anular Venta'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Historial'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(icon: const Icon(Icons.bar_chart), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesScreen()))),
-        ],
-      ),
       body: Column(
         children: [
-          // 1. BARRA DE BÚSQUEDA GENERAL
+          // BARRA DE BÚSQUEDA GENERAL
           Padding(
             padding: const EdgeInsets.only(left: 10, right: 10, top: 10, bottom: 5),
             child: TextField(
@@ -152,13 +165,12 @@ class _HistorialScreenState extends State<HistorialScreen> {
             ),
           ),
 
-          // 2. BOTONES DE FILTROS AVANZADOS (Fechas e ID)
+          // BOTONES DE FILTROS AVANZADOS (Fechas e ID)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Botón de Fecha
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _seleccionarRangoFechas,
@@ -177,7 +189,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Botón de ID
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _dialogoFiltroID,
@@ -193,7 +204,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
                     ),
                   ),
                 ),
-                // Botón para limpiar todos los filtros (solo aparece si hay algo activo)
                 if (_rangoFechas != null || _filtroIdExacto.isNotEmpty || _buscadorController.text.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.filter_alt_off, color: Colors.red),
@@ -212,7 +222,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
           
           const Divider(),
 
-          // 3. LISTA DE RESULTADOS
+          // LISTA DE RESULTADOS
           Expanded(
             child: _entregasFiltradas.isEmpty
                 ? const Center(child: Text('No se encontraron entregas con esos filtros.'))
@@ -230,7 +240,19 @@ class _HistorialScreenState extends State<HistorialScreen> {
                           leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.receipt_long, color: Colors.white)),
                           title: Text(entrega['cliente_nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text('Congeladora #${entrega['codigo_congeladora']}\n$fechaFormateada'),
-                          trailing: Text('S/ ${entrega['total'].toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+                          // --- NUEVO: Botón de Anular junto al total ---
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('S/ ${entrega['total'].toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+                              const SizedBox(width: 5),
+                              IconButton(
+                                icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                                tooltip: 'Anular Venta',
+                                onPressed: () => _confirmarAnulacion(entrega['id']),
+                              ),
+                            ],
+                          ),
                           isThreeLine: true,
                         ),
                       );
