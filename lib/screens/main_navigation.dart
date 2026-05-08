@@ -3,7 +3,8 @@ import 'dashboard.dart';
 import 'clientes_screen.dart';
 import 'mapa_screen.dart';
 import 'historial_screen.dart';
-import 'backup_screen.dart'; // <-- IMPORTAMOS LA NUEVA PANTALLA
+import 'backup_screen.dart'; 
+import 'reportes_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -45,6 +46,16 @@ class _MainNavigationState extends State<MainNavigation> {
                   Text('Gestión Heladería', style: TextStyle(color: Colors.white, fontSize: 20)),
                 ],
               ),
+            ),
+            // --- ¡AQUÍ REGRESAMOS LAS ESTADÍSTICAS! ---
+            ListTile(
+              leading: const Icon(Icons.bar_chart, color: Colors.blue),
+              title: const Text('Estadísticas y Reportes'),
+              subtitle: const Text('Ingresos y alertas de stock'),
+              onTap: () {
+                Navigator.pop(context); // Cierra el menú lateral primero
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesScreen()));
+              },
             ),
             ListTile(
               leading: const Icon(Icons.save),
